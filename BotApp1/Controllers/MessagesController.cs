@@ -30,7 +30,7 @@ namespace BotApp1
                 // return our reply to the user
                 // return message.CreateReplyMessage($"You said: {message.Text}");
                 string filter = message.Text;
-                string result = await ProcessRequest(filter);
+                string result = ProcessRequest(filter);
                 return message.CreateReplyMessage(result);
             }
             else
@@ -72,13 +72,13 @@ namespace BotApp1
         }
 
 
-        private async Task<string> ProcessRequest(string keywords)
+        private string ProcessRequest(string keywords)
         {
-            var records = await GetRecords(keywords);
+            var records = GetRecords(keywords);
             return records;
         }
 
-        private async Task<string> GetRecords(string keywords)
+        private string GetRecords(string keywords)
         {
             string urlRequestString = $"https://chkoenigdemo01.api.crm.dynamics.com/api/data/v8.0/knowledgearticles?$filter=contains(description,%27{keywords}%27)";
 
@@ -96,25 +96,23 @@ namespace BotApp1
 
         }
 
+        private async void AddAuthorizationHeader(WebRequest client)
+        {
+            client.PreAuthenticate = true;
+
+            string resourceId = "https://chkoenigdemo01.crm.dynamics.com";
+            string authorityUrl = "https://login.windows.net/common";
+            string clientId = "fa8c25d3-37fb-44d2-a941-506edd3b49e1";
+            string clientSecret = "0OUGEY1M49aeJhAjAP0txOg15xubh6aCp3fjQk7w+Is=";
+
+            AuthenticationContext authContext = new AuthenticationContext(authorityUrl, false);
+            ClientCredential clientCredential = new ClientCredential(clientId, clientSecret);
+            AuthenticationResult authResult = await authContext.AcquireTokenAsync(resourceId, clientCredential);
+
+            client.Headers.Add("Authorization", new AuthenticationHeaderValue("Bearer", authResult.AccessToken).ToString());
+
+        }
         
-private async void AddAuthorizationHeader(WebRequest client)
-{
-    client.PreAuthenticate = true;
-
-    string resourceId = "https://chkoenigdemo01.crm.dynamics.com/api/data/v8.0";
-    string authorityUrl = "https://login.windows.net/common";
-    string clientId = "fa8c25d3-37fb-44d2-a941-506edd3b49e1";
-    string clientSecret = "0OUGEY1M49aeJhAjAP0txOg15xubh6aCp3fjQk7w+Is=";
-            
-    AuthenticationContext authContext = new AuthenticationContext(authorityUrl, false);
-    ClientCredential clientCredential = new ClientCredential(clientId, clientSecret);
-    AuthenticationResult authResult = await authContext.AcquireTokenAsync(resourceId, clientCredential);
-
-    client.Headers.Add("Authorization", new AuthenticationHeaderValue("Bearer", authResult.AccessToken).ToString());
-
-}
-
-
     }
 
 }
