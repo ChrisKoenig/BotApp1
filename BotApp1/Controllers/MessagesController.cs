@@ -30,7 +30,7 @@ namespace BotApp1
                 // return our reply to the user
                 // return message.CreateReplyMessage($"You said: {message.Text}");
                 string filter = message.Text;
-                string result = ProcessRequest(filter);
+                string result = await ProcessRequest(filter);
                 return message.CreateReplyMessage(result);
             }
             else
@@ -72,47 +72,94 @@ namespace BotApp1
         }
 
 
-        private string ProcessRequest(string keywords)
+        private async Task<string> ProcessRequest(string keywords)
         {
-            var records = GetRecords(keywords);
+            var records = await GetRecords(keywords);
             return records;
         }
 
-        private string GetRecords(string keywords)
+        private async Task<string> GetRecords(string keywords)
         {
-            string urlRequestString = $"https://chkoenigdemo01.api.crm.dynamics.com/api/data/v8.0/knowledgearticles?$filter=contains(description,%27{keywords}%27)";
-
-            var request = HttpWebRequest.Create(urlRequestString);
-            AddAuthorizationHeader(request);
-
-            string result = "";
-
-            using (HttpWebResponse response = request.GetResponse() as HttpWebResponse)
+            try
             {
-                StreamReader reader = new StreamReader(response.GetResponseStream());
-                result = reader.ReadToEnd();
-            }
-            return result;
+                string serviceUrl = $"https://chkoenigdemo01.api.crm.dynamics.com/api/data/v8.1/knowledgearticles?$filter=contains(content,%27{keywords}%27)";
 
+                // build the client
+                HttpClient client = new HttpClient();
+                client.Timeout = new TimeSpan(0, 2, 0);
+
+                HttpRequestMessage request1 = new HttpRequestMessage(HttpMethod.Get, serviceUrl);
+                request1.Method = HttpMethod.Get;
+
+                // wait for the response
+                HttpResponseMessage response1 = await client.SendAsync(request1);
+
+                // we're expecting a 401 status code
+                if (response1.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    var header= response1.Headers.WwwAuthenticate.ToString();
+                    var authUrl = "";
+                    var resourceUrl = "";
+                    var authHeader = "";
+                    ParseAuthResponse(header, out authHeader, out authUrl, out resourceUrl);
+
+                    var token = await GetAuthToken(authUrl, resourceUrl);
+
+                    client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(authHeader, token);
+                    HttpRequestMessage request2 = new HttpRequestMessage(HttpMethod.Get, serviceUrl);
+                    request2.Method = HttpMethod.Get;
+
+                    // wait for the response
+                    HttpResponseMessage response2 = await client.SendAsync(request2);
+                    if (response2.IsSuccessStatusCode)
+                    {
+                        return "FINISH: RESPONSE2";
+                    }
+                    else
+                    {
+                        return "ERROR: RESPONSE2";
+                    }
+                }
+                else
+                {
+                    return "FINISH: RESPONSE1";
+                }
+
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return "ERROR: " + ex.Message;
+            }
         }
 
-        private async void AddAuthorizationHeader(WebRequest client)
+        private void ParseAuthResponse(string header, out string authHeader, out string authUrl, out string resourceUrl)
         {
-            client.PreAuthenticate = true;
+            var items = header.Split(' ');
+            authHeader = items[0].Trim();
+            authUrl = items[1].Substring(18, items[1].Length - 19);
+            resourceUrl = items[2].Substring(12);
+        }
 
-            string resourceId = "https://chkoenigdemo01.crm.dynamics.com";
-            string authorityUrl = "https://login.windows.net/common";
+        private async Task<string> GetAuthToken(string authUrl, string resourceUrl)
+        {
+            //string resourceId = "https://chkoenigdemo01.crm.dynamics.com";
+            //string authorityUrl = "https://login.microsoftonline.com/d1a9ab67-6f36-4c34-84ad-ad634026ed95/oauth2/authorize";
             string clientId = "fa8c25d3-37fb-44d2-a941-506edd3b49e1";
             string clientSecret = "0OUGEY1M49aeJhAjAP0txOg15xubh6aCp3fjQk7w+Is=";
 
-            AuthenticationContext authContext = new AuthenticationContext(authorityUrl, false);
+            AuthenticationContext authContext = new AuthenticationContext(authUrl, false);
             ClientCredential clientCredential = new ClientCredential(clientId, clientSecret);
-            AuthenticationResult authResult = await authContext.AcquireTokenAsync(resourceId, clientCredential);
+            AuthenticationResult authResult = await authContext.AcquireTokenAsync(resourceUrl, clientCredential);
+            string authHeader = authResult.CreateAuthorizationHeader();
 
-            client.Headers.Add("Authorization", new AuthenticationHeaderValue("Bearer", authResult.AccessToken).ToString());
+            return authResult.AccessToken;
 
         }
-        
+
+        //string authorityUrl = "https://login.windows.net/common";
+        //string authorityUrl = "https://login.microsoftonline.com/d1a9ab67-6f36-4c34-84ad-ad634026ed95/oauth2/token";
+
     }
 
 }
